@@ -3,11 +3,17 @@
 import math
 import heapq
 from collections import Counter
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, List, Optional, Sequence, Union
 
-from codinglab import PrefixEncoderDecoder, PrefixCodeTree, SourceChar, ChannelChar
-from codinglab.tree import TreeNode
+from codinglab import (
+    PrefixEncoderDecoder,
+    PrefixCodeTree,
+    SourceChar,
+    ChannelChar,
+    TreeNode,
+)
 from enum import Enum
+from dataclasses import dataclass
 
 
 class BinaryAlphabet(str, Enum):
@@ -17,16 +23,23 @@ class BinaryAlphabet(str, Enum):
     one = "1"
 
 
+@dataclass(kw_only=True)
 class HuffmanNode(TreeNode[ChannelChar, SourceChar]):
     """Node in the Huffman tree during construction."""
+
+    freq: float
 
     def __init__(
         self,
         freq: float = 0.0,
         value: Optional[SourceChar] = None,
-        children: Optional[Dict[str, "HuffmanNode"]] = None,
+        children: Optional[Dict[ChannelChar, "HuffmanNode"]] = None,
     ) -> None:
-        super().__init__(value=value, children=children)
+        if children is None:
+            children = {}
+        # Приводим children к нужному типу
+        tree_children: Dict[ChannelChar, TreeNode[ChannelChar, SourceChar]] = children  # type: ignore
+        super().__init__(value=value, children=tree_children)
         self.freq = freq
 
     def __lt__(self, other: "HuffmanNode") -> bool:
@@ -36,41 +49,23 @@ class HuffmanNode(TreeNode[ChannelChar, SourceChar]):
 class HuffmanNGramCoder(PrefixEncoderDecoder[str, BinaryAlphabet]):
     """
     Huffman coder for n-grams.
-
-    This coder implements Huffman coding for blocks of n symbols (n-grams).
-    It builds a Huffman tree based on frequencies of n-grams in the text.
     """
 
     def __init__(self, n: int = 1, padding_symbol: str = "\x00") -> None:
-        """
-        Initialize the Huffman n-gram coder.
-
-        Args:
-            n: Length of n-grams (default: 1 for standard Huffman)
-            padding_symbol: Symbol used for padding (default: null character)
-        """
         self.n = n
         self._padding_symbol = padding_symbol
         self._code_table: Optional[Dict[str, Sequence[BinaryAlphabet]]] = None
-        self._reverse_table: Dict[str, str] = {}
         self._frequencies: Dict[str, float] = {}
         self._tree: Optional[PrefixCodeTree] = None
-
         self._source_alphabet: List[str] = []
         self._channel_alphabet: List[BinaryAlphabet] = [
             BinaryAlphabet.zero,
             BinaryAlphabet.one,
         ]
-
-        super().__init__(self._source_alphabet, self._channel_alphabet)
+        # НЕ вызываем super().__init__ здесь — алфавит ещё неизвестен
 
     def fit(self, text: str) -> None:
-        """
-        Build Huffman code table from text.
-
-        Args:
-            text: Training text to learn n-gram frequencies
-        """
+        """Build Huffman code table from text."""
         ngrams = self._extract_ngrams(text)
 
         counter = Counter(ngrams)
@@ -79,7 +74,11 @@ class HuffmanNGramCoder(PrefixEncoderDecoder[str, BinaryAlphabet]):
 
         self._source_alphabet = list(self._frequencies.keys())
 
+        # Сначала строим дерево
         self._build_prefix_code_tree()
+
+        # Затем вызываем родительский __init__ с правильными алфавитами
+        super().__init__(self._source_alphabet, self._channel_alphabet)
 
     def _extract_ngrams(self, text: str) -> List[str]:
         """Extract n-grams from text (with padding if needed)."""
@@ -113,28 +112,29 @@ class HuffmanNGramCoder(PrefixEncoderDecoder[str, BinaryAlphabet]):
         while len(heap) > 1:
             left = heapq.heappop(heap)
             right = heapq.heappop(heap)
-            parent_node: HuffmanNode = HuffmanNode(
+            parent: HuffmanNode = HuffmanNode(
                 freq=left.freq + right.freq,
                 value=None,
-                children={"0": left, "1": right},
+                children={BinaryAlphabet.zero: left, BinaryAlphabet.one: right},
             )
-            heapq.heappush(heap, parent_node)
+            heapq.heappush(heap, parent)
 
         root_huffman = heap[0] if heap else None
         self._tree = PrefixCodeTree(root_huffman)
-        self._build_table_from_tree()
 
-    def encode(self, text: Sequence[str]) -> Sequence[BinaryAlphabet]:
+    def encode(self, text: Union[str, Sequence[str]]) -> Sequence[BinaryAlphabet]:
         """Encode text using n-gram Huffman codes."""
         if not self._code_table:
             raise ValueError("Code table not built. Call fit() first.")
 
-        if isinstance(text, (list, tuple)):
-            text_str = "".join(text)
+        # Правильно обрабатываем вход: строка или последовательность
+        if isinstance(text, str):
+            text_str = text
         else:
-            text_str = str(text)
+            text_str = "".join(text)
 
-        self._pad_text(text_str)
+        # ВАЖНО: сохраняем результат pad_text!
+        text_str = self._pad_text(text_str)
         ngrams = self._extract_ngrams(text_str)
 
         encoded_parts: List[BinaryAlphabet] = []
@@ -146,17 +146,20 @@ class HuffmanNGramCoder(PrefixEncoderDecoder[str, BinaryAlphabet]):
 
         return encoded_parts
 
-    def decode(self, encoded: Sequence[BinaryAlphabet]) -> Sequence[str]:
+    def decode(self, encoded: Sequence[BinaryAlphabet]) -> str:
+        """Decode Huffman-encoded text."""
         if not self._tree:
             raise ValueError("Tree not built. Call fit() first.")
 
+        # Важно: оставляем encoded как есть, не преобразуем в строки
         decoded_ngrams = super().decode(encoded)
-
         decoded_text = "".join(decoded_ngrams)
+
+        # Убираем паддинг в конце
         if decoded_text.endswith(self._padding_symbol):
             decoded_text = decoded_text.rstrip(self._padding_symbol)
 
-        return [decoded_text]
+        return decoded_text
 
     @property
     def expected_code_length(self) -> float:
