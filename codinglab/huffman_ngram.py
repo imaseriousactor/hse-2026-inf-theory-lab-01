@@ -37,7 +37,6 @@ class HuffmanNode(TreeNode[ChannelChar, SourceChar]):
     ) -> None:
         if children is None:
             children = {}
-        # Приводим children к нужному типу
         tree_children: Dict[ChannelChar, TreeNode[ChannelChar, SourceChar]] = children  # type: ignore
         super().__init__(value=value, children=tree_children)
         self.freq = freq
@@ -62,7 +61,6 @@ class HuffmanNGramCoder(PrefixEncoderDecoder[str, BinaryAlphabet]):
             BinaryAlphabet.zero,
             BinaryAlphabet.one,
         ]
-        # НЕ вызываем super().__init__ здесь — алфавит ещё неизвестен
 
     def fit(self, text: str) -> None:
         """Build Huffman code table from text."""
@@ -74,10 +72,8 @@ class HuffmanNGramCoder(PrefixEncoderDecoder[str, BinaryAlphabet]):
 
         self._source_alphabet = list(self._frequencies.keys())
 
-        # Сначала строим дерево
         self._build_prefix_code_tree()
 
-        # Затем вызываем родительский __init__ с правильными алфавитами
         super().__init__(self._source_alphabet, self._channel_alphabet)
 
     def _extract_ngrams(self, text: str) -> List[str]:
@@ -127,13 +123,11 @@ class HuffmanNGramCoder(PrefixEncoderDecoder[str, BinaryAlphabet]):
         if not self._code_table:
             raise ValueError("Code table not built. Call fit() first.")
 
-        # Правильно обрабатываем вход: строка или последовательность
         if isinstance(text, str):
             text_str = text
         else:
             text_str = "".join(text)
 
-        # ВАЖНО: сохраняем результат pad_text!
         text_str = self._pad_text(text_str)
         ngrams = self._extract_ngrams(text_str)
 
@@ -151,11 +145,9 @@ class HuffmanNGramCoder(PrefixEncoderDecoder[str, BinaryAlphabet]):
         if not self._tree:
             raise ValueError("Tree not built. Call fit() first.")
 
-        # Важно: оставляем encoded как есть, не преобразуем в строки
         decoded_ngrams = super().decode(encoded)
         decoded_text = "".join(decoded_ngrams)
 
-        # Убираем паддинг в конце
         if decoded_text.endswith(self._padding_symbol):
             decoded_text = decoded_text.rstrip(self._padding_symbol)
 
