@@ -62,8 +62,6 @@ class HuffmanNGramCoder(PrefixEncoderDecoder[str, BinaryAlphabet]):
             BinaryAlphabet.one,
         ]
 
-        # Вызываем родительский инициализатор с пустыми алфавитами
-        # Они будут обновлены в fit()
         super().__init__(self._source_alphabet, self._channel_alphabet)
 
     def fit(self, text: str) -> None:
@@ -80,9 +78,6 @@ class HuffmanNGramCoder(PrefixEncoderDecoder[str, BinaryAlphabet]):
         self._frequencies = {ngram: count / total for ngram, count in counter.items()}
 
         self._source_alphabet = list(self._frequencies.keys())
-
-        # Обновляем алфавиты в родительском классе
-        # (если базовый класс требует)
 
         self._build_prefix_code_tree()
 
@@ -134,7 +129,6 @@ class HuffmanNGramCoder(PrefixEncoderDecoder[str, BinaryAlphabet]):
         if not self._code_table:
             raise ValueError("Code table not built. Call fit() first.")
 
-        # Конвертируем входные данные в строку
         if isinstance(text, (list, tuple)):
             text_str = "".join(text)
         else:
@@ -156,7 +150,6 @@ class HuffmanNGramCoder(PrefixEncoderDecoder[str, BinaryAlphabet]):
         if not self._tree:
             raise ValueError("Tree not built. Call fit() first.")
 
-        # ✅ Передаём encoded напрямую, без конвертации
         decoded_ngrams = super().decode(encoded)
 
         decoded_text = "".join(decoded_ngrams)
